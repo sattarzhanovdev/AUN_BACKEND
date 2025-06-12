@@ -61,25 +61,39 @@ def transaction_summary(request):
         "daily_expense": daily_expense,
         "monthly_expense": monthly_expense
     })
-    
+
+
+
 class StockViewSet(viewsets.ModelViewSet):
     queryset = Stock.objects.all()
     serializer_class = StockSerializer
 
+    @action(detail=False, methods=['get'], url_path='by-code')
+    def get_by_code(self, request):
+        code = request.query_params.get('code')
+        if not code:
+            return Response({'error': 'code is required'}, status=status.HTTP_400_BAD_REQUEST)
+        items = Stock.objects.filter(code=code)
+        if not items.exists():
+            return Response([], status=status.HTTP_200_OK)
+        serializer = self.get_serializer(items, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['patch'], url_path='by-code/(?P<code>[^/.]+)')
+    def patch_by_code(self, request, code=None):
+        stock = get_object_or_404(Stock, code=code)
+        serializer = self.get_serializer(stock, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
     def create(self, request, *args, **kwargs):
         data = request.data
-
-        # если массив
         if isinstance(data, list):
             serializer = self.get_serializer(data=data, many=True)
             serializer.is_valid(raise_exception=True)
-
-            # ✅ вызываем create_bulk вручную на классе сериализатора
             created = StockSerializer().create_bulk(serializer.validated_data)
-
             return Response(StockSerializer(created, many=True).data, status=status.HTTP_201_CREATED)
-
-        # если объект
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
