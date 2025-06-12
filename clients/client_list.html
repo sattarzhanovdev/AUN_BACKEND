@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Клиенты</title>
+</head>
+<body>
+    <h1>Список клиентов</h1>
+    <ul>
+        {% for client in clients %}
+            <li>{{ client.full_name }} - {{ client.phone_number }} - {{ client.total_price }} KGS</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
