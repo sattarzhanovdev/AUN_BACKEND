@@ -12,7 +12,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.utils.timezone import now
 from datetime import timedelta
-from .models import Transaction
+from .models import Transaction, Stock
+from .serializers import TransactionSerializer, StockSerializer
 
 class TransactionViewSet(viewsets.ModelViewSet):
     queryset = Transaction.objects.all()
@@ -60,3 +61,26 @@ def transaction_summary(request):
         "daily_expense": daily_expense,
         "monthly_expense": monthly_expense
     })
+    
+class StockViewSet(viewsets.ModelViewSet):
+    queryset = Stock.objects.all()
+    serializer_class = StockSerializer
+
+    def create(self, request, *args, **kwargs):
+        data = request.data
+
+        # если массив
+        if isinstance(data, list):
+            serializer = self.get_serializer(data=data, many=True)
+            serializer.is_valid(raise_exception=True)
+
+            # ✅ вызываем create_bulk вручную на классе сериализатора
+            created = StockSerializer().create_bulk(serializer.validated_data)
+
+            return Response(StockSerializer(created, many=True).data, status=status.HTTP_201_CREATED)
+
+        # если объект
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        return Response(self.get_serializer(instance).data, status=status.HTTP_201_CREATED)
