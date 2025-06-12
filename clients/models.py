@@ -31,3 +31,30 @@ class Stock(models.Model):
 
     def __str__(self):
         return f"{self.code} — {self.name}"
+    
+class SaleHistory(models.Model):
+    payment_type = models.CharField(
+        max_length=50,
+        choices=[('cash', 'Наличные'), ('card', 'Карта')],
+        verbose_name="Тип оплаты"
+    )
+    total = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Итого")
+    date = models.DateTimeField(default=now, verbose_name="Дата продажи")
+
+    def __str__(self):
+        return f"Продажа на {self.total} сом — {self.date.strftime('%d.%m.%Y %H:%M')}"
+
+    class Meta:
+        verbose_name = "Продажа"
+        verbose_name_plural = "Продажи"
+
+class SaleItem(models.Model):
+    sale = models.ForeignKey(SaleHistory, related_name="items", on_delete=models.CASCADE)
+    code = models.CharField(max_length=100, verbose_name="Код товара")
+    name = models.CharField(max_length=255, verbose_name="Наименование")
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Цена")
+    quantity = models.PositiveIntegerField(verbose_name="Количество")
+    total = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Сумма")
+
+    def __str__(self):
+        return f"{self.name} x{self.quantity}"

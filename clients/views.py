@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.db.models import Sum
 from django.utils.timezone import now
 from datetime import timedelta
+from django.shortcuts import get_object_or_404
 
 from .models import Transaction
 from .serializers import TransactionSerializer
@@ -12,8 +13,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.utils.timezone import now
 from datetime import timedelta
-from .models import Transaction, Stock
-from .serializers import TransactionSerializer, StockSerializer
+from .models import Transaction, Stock, SaleHistory, SaleItem
+from .serializers import TransactionSerializer, StockSerializer, SaleHistorySerializer, SaleItemSerializer
 
 class TransactionViewSet(viewsets.ModelViewSet):
     queryset = Transaction.objects.all()
@@ -73,28 +74,57 @@ class StockViewSet(viewsets.ModelViewSet):
         code = request.query_params.get('code')
         if not code:
             return Response({'error': 'code is required'}, status=status.HTTP_400_BAD_REQUEST)
+
         items = Stock.objects.filter(code=code)
         if not items.exists():
             return Response([], status=status.HTTP_200_OK)
+
         serializer = self.get_serializer(items, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['patch'], url_path='by-code/(?P<code>[^/.]+)')
-    def patch_by_code(self, request, code=None):
-        stock = get_object_or_404(Stock, code=code)
-        serializer = self.get_serializer(stock, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+    @action(detail=False, methods=['put'], url_path='by-code/(?P<code>[^/.]+)')
+    def subtract_quantity_by_code(self, request, code=None):
+        try:
+            stock = Stock.objects.get(code=code)
+        except Stock.DoesNotExist:
+            return Response({'error': 'Товар не найден'}, status=404)
+
+        try:
+            subtract_value = float(request.data.get('quantity', 0))
+        except (ValueError, TypeError):
+            return Response({'error': 'Некорректное значение quantity'}, status=400)
+
+        if subtract_value < 0:
+            return Response({'error': 'Количество не может быть отрицательным'}, status=400)
+
+        if stock.quantity < subtract_value:
+            return Response({'error': 'Недостаточно товара на складе'}, status=400)
+
+        stock.quantity -= subtract_value
+        stock.save()
+
+        serializer = self.get_serializer(stock)
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
         data = request.data
+
+        # если массив
         if isinstance(data, list):
             serializer = self.get_serializer(data=data, many=True)
             serializer.is_valid(raise_exception=True)
-            created = StockSerializer().create_bulk(serializer.validated_data)
-            return Response(StockSerializer(created, many=True).data, status=status.HTTP_201_CREATED)
+
+            # сохраняем каждую запись
+            created = [self.get_serializer().create(item) for item in serializer.validated_data]
+
+            return Response(self.get_serializer(created, many=True).data, status=status.HTTP_201_CREATED)
+
+        # если объект
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         return Response(self.get_serializer(instance).data, status=status.HTTP_201_CREATED)
+    
+class SaleHistoryViewSet(viewsets.ModelViewSet):
+    queryset = SaleHistory.objects.all().order_by('-date')
+    serializer_class = SaleHistorySerializer
