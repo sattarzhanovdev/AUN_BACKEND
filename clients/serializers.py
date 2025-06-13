@@ -1,21 +1,48 @@
 from rest_framework import serializers
-from .models import Transaction, Stock, SaleHistory, SaleItem
+from .models import (
+    Transaction, Stock, SaleHistory, SaleItem,
+    Category, StockMovement, ReturnItem
+)
+
+
+# ---------- базовые ----------------------------------------------------------
 
 class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction
         fields = '__all__'
 
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ['id', 'name']
+
+
 class StockSerializer(serializers.ModelSerializer):
+    category = CategorySerializer(read_only=True)
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        source='category',
+        write_only=True,
+        required=False
+    )
+    fixed_quantity = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True   # 👈 только чтение
+    )
+
     class Meta:
         model = Stock
         fields = '__all__'
-        
-        
+
+
+# ---------- продажи ----------------------------------------------------------
+
 class SaleItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = SaleItem
         fields = ['code', 'name', 'price', 'quantity', 'total']
+
 
 class SaleHistorySerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True)
@@ -25,8 +52,76 @@ class SaleHistorySerializer(serializers.ModelSerializer):
         fields = ['id', 'payment_type', 'total', 'date', 'items']
 
     def create(self, validated_data):
+        """
+        - создаём саму продажу
+        - создаём позиции
+        - уменьшаем Stock.quantity
+        - пишем StockMovement
+        """
+        from .models import StockMovement, Stock   # локальный импорт, чтобы избежать циклов
+
         items_data = validated_data.pop('items')
         sale = SaleHistory.objects.create(**validated_data)
-        for item in items_data:
-            SaleItem.objects.create(sale=sale, **item)
+
+        for item_data in items_data:
+            SaleItem.objects.create(sale=sale, **item_data)
+
+            # уменьшаем склад
+            stock_obj = Stock.objects.get(code=item_data['code'])
+            stock_obj.quantity -= item_data['quantity']
+            stock_obj.save()
+
+            # движение
+            StockMovement.objects.create(
+                stock=stock_obj,
+                movement_type='sale',
+                quantity=item_data['quantity'],
+                sale=sale,
+                comment='Продажа'
+            )
+
         return sale
+
+
+# ---------- движение по складу ----------------------------------------------
+
+class StockMovementSerializer(serializers.ModelSerializer):
+    stock_name = serializers.CharField(source='stock.name', read_only=True)
+
+    class Meta:
+        model = StockMovement
+        fields = ['id', 'stock', 'stock_name', 'movement_type',
+                  'quantity', 'comment', 'date', 'sale']
+
+
+# ---------- возврат ----------------------------------------------------------
+
+class ReturnItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReturnItem
+        fields = ['id', 'sale_item', 'quantity', 'reason', 'date']
+
+    def create(self, validated_data):
+        """
+        + увеличиваем остаток
+        + создаём StockMovement с type='return'
+        """
+        from .models import StockMovement, Stock
+
+        sale_item = validated_data['sale_item']
+        quantity  = validated_data['quantity']
+
+        # увеличиваем склад
+        stock_obj = Stock.objects.get(code=sale_item.code)
+        stock_obj.quantity += quantity
+        stock_obj.save()
+
+        # движение
+        StockMovement.objects.create(
+            stock=stock_obj,
+            movement_type='return',
+            quantity=quantity,
+            comment=f'Возврат по продаже #{sale_item.sale_id}'
+        )
+
+        return super().create(validated_data)
