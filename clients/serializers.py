@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Transaction, Stock, SaleHistory, SaleItem,
-    Category, StockMovement, ReturnItem
+    Category, StockMovement, ReturnItem, CashSession
 )
 
 
@@ -100,3 +100,9 @@ class ReturnItemSerializer(serializers.ModelSerializer):
     class Meta:
         model  = ReturnItem
         fields = ["id", "sale_item", "quantity", "reason", "date"]
+        
+class CashSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = CashSession
+        fields = ['id', 'opened_at', 'opening_sum', 'closed_at', 'closing_sum', 'is_open']
+        read_only_fields = ['opened_at', 'closed_at', 'is_open']

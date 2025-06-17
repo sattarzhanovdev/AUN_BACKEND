@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Transaction, Stock, SaleHistory, SaleItem,
-    Category, StockMovement, ReturnItem
+    Category, StockMovement, ReturnItem, CashSession
 )
 
 
@@ -49,3 +49,9 @@ class ReturnItemAdmin(admin.ModelAdmin):
     list_display = ['sale_item', 'quantity', 'reason', 'date']
     list_filter = ['date']
     search_fields = ['sale_item__name', 'reason']
+
+@admin.register(CashSession)
+class CashSessionAdmin(admin.ModelAdmin):
+    list_display  = ('opened_at', 'closed_at', 'opening_sum', 'closing_sum', 'is_open')
+    list_filter   = ('closed_at',)
+    readonly_fields = ('opened_at', 'closed_at')

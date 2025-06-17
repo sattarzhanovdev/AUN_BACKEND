@@ -6,6 +6,7 @@ from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import F
 from django.utils.timezone import now
+from django.core.exceptions import ValidationError
 
 
 class Transaction(models.Model):
@@ -152,3 +153,38 @@ class ReturnItem(models.Model):
     class Meta:
         verbose_name = "Возврат позиции"
         verbose_name_plural = "Возвраты позиций"
+        
+class CashSession(models.Model):
+    opened_at   = models.DateTimeField(default=now, editable=False)
+    closed_at   = models.DateTimeField(null=True, blank=True)
+    opening_sum = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    closing_sum = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    # ── удобные свойства ────────────────────────────────
+    @property
+    def is_open(self):
+        return self.closed_at is None
+
+    def clean(self):
+        # запрет на одновременные открытые смены
+        if self.is_open and CashSession.objects.filter(closed_at__isnull=True).exclude(pk=self.pk).exists():
+            raise ValidationError('Уже есть открытая кассовая смена')
+
+    # ── атомичное закрытие смены ────────────────────────
+    def close(self, closing_sum: float):
+        if not self.is_open:
+            raise ValidationError('Смена уже закрыта')
+        with transaction.atomic():
+            self.closing_sum = closing_sum
+            self.closed_at   = now()
+            self.full_clean()
+            self.save()
+
+    def __str__(self):
+        state = 'Открыта' if self.is_open else 'Закрыта'
+        return f'{state} {self.opened_at:%d.%m %H:%M}'
+
+    class Meta:
+        ordering = ['-opened_at']
+        verbose_name = 'Кассовая смена'
+        verbose_name_plural = 'Кассовые смены'

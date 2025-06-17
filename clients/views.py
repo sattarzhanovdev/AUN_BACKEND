@@ -8,11 +8,11 @@ from django.shortcuts import get_object_or_404
 
 from .models import (
     Transaction, Stock, SaleHistory, Category,
-    StockMovement, ReturnItem
+    StockMovement, ReturnItem, CashSession
 )
 from .serializers import (
     TransactionSerializer, StockSerializer, SaleHistorySerializer,
-    CategorySerializer, StockMovementSerializer, ReturnItemSerializer
+    CategorySerializer, StockMovementSerializer, ReturnItemSerializer, CashSessionSerializer
 )
 
 # ------------------- ТРАНЗАКЦИИ ---------------------------------------------
@@ -233,3 +233,24 @@ class ReturnItemViewSet(viewsets.ModelViewSet):
             quantity=qty,
             reason=reason
         )
+        
+
+class CashSessionViewSet(viewsets.ModelViewSet):
+    queryset = CashSession.objects.all()
+    serializer_class = CashSessionSerializer
+
+    # POST /cash-sessions/open/
+    @action(detail=False, methods=['post'])
+    def open(self, request):
+        opening_sum = request.data.get('opening_sum', 0)
+        session = CashSession(opening_sum=opening_sum)
+        session.full_clean()
+        session.save()
+        return Response(self.get_serializer(session).data, status=status.HTTP_201_CREATED)
+
+    # POST /cash-sessions/{id}/close/
+    @action(detail=True, methods=['post'])
+    def close(self, request, pk=None):
+        session = self.get_object()
+        session.close(request.data.get('closing_sum', 0))
+        return Response(self.get_serializer(session).data)

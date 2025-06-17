@@ -4,7 +4,7 @@ from .views import (
     TransactionViewSet, transaction_summary,
     StockViewSet, SaleHistoryViewSet,
     CategoryViewSet, StockMovementViewSet,
-    ReturnItemViewSet
+    ReturnItemViewSet, CashSessionViewSet
 )
 
 router = DefaultRouter()
@@ -14,6 +14,8 @@ router.register(r'stocks', StockViewSet, basename='stock')
 router.register(r'sales', SaleHistoryViewSet, basename='sale')
 router.register(r'stock-movements', StockMovementViewSet, basename='movement')
 router.register(r'returns', ReturnItemViewSet, basename='return')
+router.register(r'cash-sessions', CashSessionViewSet, basename='cashsession')
+
 
 urlpatterns = [
     path('', include(router.urls)),
