@@ -174,7 +174,62 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
 
 # ------------------- ВОЗВРАТЫ ------------------------------------------------
 
+
 class ReturnItemViewSet(viewsets.ModelViewSet):
+    """
+    POST принимает:
+      • единичный объект  {sale_item, quantity, reason?}
+      • или массив таких объектов […]
+    """
     queryset = ReturnItem.objects.all().order_by('-date')
     serializer_class = ReturnItemSerializer
 
+    # ───────────────────────────────────────────────────────────
+    def create(self, request, *args, **kwargs):
+        data_is_list = isinstance(request.data, list)
+
+        serializer = self.get_serializer(
+            data=request.data,
+            many=data_is_list           # <──── обязательный флаг
+        )
+        serializer.is_valid(raise_exception=True)
+
+        # создаём записи + движение по складу
+        if data_is_list:
+            items = [self._save_one(d) for d in serializer.validated_data]
+            out   = self.get_serializer(items, many=True)
+        else:
+            item  = self._save_one(serializer.validated_data)
+            out   = self.get_serializer(item)
+
+        return Response(out.data, status=status.HTTP_201_CREATED)
+
+    # ───────────────────────────────────────────────────────────
+    def _save_one(self, data):
+        """
+        helper — одно возвращённое SKU
+        (+ откат остатков, + StockMovement)
+        """
+        sale_item = data["sale_item"]      # объект SaleItem
+        qty       = data["quantity"]
+        reason    = data.get("reason", "")
+
+        # 1. вернули на склад
+        stock = Stock.objects.get(code=sale_item.code)
+        stock.quantity += qty
+        stock.save(update_fields=["quantity"])
+
+        # 2. движение
+        StockMovement.objects.create(
+            stock=stock,
+            movement_type="return",
+            quantity=qty,
+            comment=f"Возврат по продаже #{sale_item.sale_id}"
+        )
+
+        # 3. сам ReturnItem
+        return ReturnItem.objects.create(
+            sale_item=sale_item,
+            quantity=qty,
+            reason=reason
+        )

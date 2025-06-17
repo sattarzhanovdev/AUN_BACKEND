@@ -2,6 +2,10 @@ from django.db import models
 from django.utils.timezone import now
 from decimal import Decimal
 from django.core.validators import MinValueValidator
+# models.py
+from django.db import models, transaction
+from django.db.models import F
+from django.utils.timezone import now
 
 
 class Transaction(models.Model):
@@ -130,15 +134,17 @@ class StockMovement(models.Model):
         verbose_name_plural = "Движения по складу"
 
 
+
 class ReturnItem(models.Model):
-    sale_item = models.OneToOneField(
-        SaleItem,
+    # ⬇️ было OneToOneField → меняем на ForeignKey
+    sale_item = models.ForeignKey(
+        'SaleItem',
         on_delete=models.CASCADE,
-        related_name='return_record'
+        related_name='return_records'
     )
     quantity = models.PositiveIntegerField()
-    reason = models.CharField(max_length=255, blank=True, null=True)
-    date = models.DateTimeField(default=now)
+    reason   = models.CharField(max_length=255, blank=True, null=True)
+    date     = models.DateTimeField(default=now)
 
     def __str__(self):
         return f"Возврат {self.quantity} × {self.sale_item.name}"

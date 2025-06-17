@@ -98,30 +98,5 @@ class StockMovementSerializer(serializers.ModelSerializer):
 
 class ReturnItemSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ReturnItem
-        fields = ['id', 'sale_item', 'quantity', 'reason', 'date']
-
-    def create(self, validated_data):
-        """
-        + увеличиваем остаток
-        + создаём StockMovement с type='return'
-        """
-        from .models import StockMovement, Stock
-
-        sale_item = validated_data['sale_item']
-        quantity  = validated_data['quantity']
-
-        # увеличиваем склад
-        stock_obj = Stock.objects.get(code=sale_item.code)
-        stock_obj.quantity += quantity
-        stock_obj.save()
-
-        # движение
-        StockMovement.objects.create(
-            stock=stock_obj,
-            movement_type='return',
-            quantity=quantity,
-            comment=f'Возврат по продаже #{sale_item.sale_id}'
-        )
-
-        return super().create(validated_data)
+        model  = ReturnItem
+        fields = ["id", "sale_item", "quantity", "reason", "date"]
