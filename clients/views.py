@@ -218,18 +218,20 @@ class ReturnItemViewSet(viewsets.ModelViewSet):
         reason = data.get("reason", "")
 
         # 1. вернули на склад
-        try:
-            stock = Stock.objects.get(code=sale_item.code)
-        except Stock.DoesNotExist:
-            stock = Stock.objects.create(
-                code=sale_item.code,
-                name=sale_item.name,
-                quantity=0,
-                price=sale_item.price,
-                unit='шт'
-            )
+        stock, created = Stock.objects.get_or_create(
+            code=sale_item.code,
+            defaults={
+                "name": sale_item.name,
+                "price": sale_item.price,
+                "price_seller": sale_item.price,
+                "quantity": 0,
+                "unit": "шт"
+            }
+        )
 
-        stock.quantity += qty
+        # обязательно работаем с Decimal
+        from decimal import Decimal
+        stock.quantity = (stock.quantity or Decimal("0")) + Decimal(qty)
         stock.save(update_fields=["quantity"])
 
         # 2. движение
