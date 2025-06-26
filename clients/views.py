@@ -176,6 +176,11 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 
+from rest_framework import status, viewsets
+from rest_framework.response import Response
+from .models import ReturnItem, Stock, StockMovement
+from .serializers import ReturnItemSerializer
+
 class ReturnItemViewSet(viewsets.ModelViewSet):
     """
     POST принимает:
@@ -205,22 +210,29 @@ class ReturnItemViewSet(viewsets.ModelViewSet):
 
     def _save_one(self, data):
         """
-        Обрабатывает одну позицию возврата
+        helper — одно возвращённое SKU
+        (+ откат остатков, + StockMovement)
         """
         sale_item = data["sale_item"]
         qty = data["quantity"]
         reason = data.get("reason", "")
 
+        # 1. вернули на склад
         try:
             stock = Stock.objects.get(code=sale_item.code)
         except Stock.DoesNotExist:
-            raise serializers.ValidationError(
-                f"Товар со штрихкодом {sale_item.code} не найден на складе"
+            stock = Stock.objects.create(
+                code=sale_item.code,
+                name=sale_item.name,
+                quantity=0,
+                price=sale_item.price,
+                unit='шт'
             )
 
         stock.quantity += qty
         stock.save(update_fields=["quantity"])
 
+        # 2. движение
         StockMovement.objects.create(
             stock=stock,
             movement_type="return",
@@ -228,6 +240,7 @@ class ReturnItemViewSet(viewsets.ModelViewSet):
             comment=f"Возврат по продаже #{sale_item.sale_id}"
         )
 
+        # 3. создаём ReturnItem
         return ReturnItem.objects.create(
             sale_item=sale_item,
             quantity=qty,
