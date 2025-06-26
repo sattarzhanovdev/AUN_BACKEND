@@ -5,6 +5,7 @@ from django.db.models import Sum
 from django.utils.timezone import now
 from datetime import timedelta
 from django.shortcuts import get_object_or_404
+from decimal import Decimal
 
 from .models import (
     Transaction, Stock, SaleHistory, Category,
@@ -211,13 +212,13 @@ class ReturnItemViewSet(viewsets.ModelViewSet):
     def _save_one(self, data):
         """
         helper — одно возвращённое SKU
-        (+ откат остатков, + StockMovement)
+        (+ откат остатков, + StockMovement, + запись возврата)
         """
         sale_item = data["sale_item"]
-        qty = data["quantity"]
-        reason = data.get("reason", "")
+        qty       = data["quantity"]
+        reason    = data.get("reason", "")
 
-        # 1. вернули на склад
+        # 1. найдём товар на складе
         stock, created = Stock.objects.get_or_create(
             code=sale_item.code,
             defaults={
@@ -229,12 +230,11 @@ class ReturnItemViewSet(viewsets.ModelViewSet):
             }
         )
 
-        # обязательно работаем с Decimal
-        from decimal import Decimal
+        # 2. обновим остаток
         stock.quantity = (stock.quantity or Decimal("0")) + Decimal(qty)
         stock.save(update_fields=["quantity"])
 
-        # 2. движение
+        # 3. создаём движение
         StockMovement.objects.create(
             stock=stock,
             movement_type="return",
@@ -242,7 +242,7 @@ class ReturnItemViewSet(viewsets.ModelViewSet):
             comment=f"Возврат по продаже #{sale_item.sale_id}"
         )
 
-        # 3. создаём ReturnItem
+        # 4. создаём возврат
         return ReturnItem.objects.create(
             sale_item=sale_item,
             quantity=qty,
