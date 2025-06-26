@@ -41,7 +41,7 @@ class StockSerializer(serializers.ModelSerializer):
 class SaleItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = SaleItem
-        fields = ['code', 'name', 'price', 'quantity', 'total']
+        fields = ['id', 'code', 'name', 'price', 'quantity', 'total']
 
 
 class SaleHistorySerializer(serializers.ModelSerializer):
