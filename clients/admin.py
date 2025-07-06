@@ -20,8 +20,7 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Stock)
 class StockAdmin(admin.ModelAdmin):
-    list_display     = ('code', 'name', 'quantity', 'fixed_quantity', 'unit', 'category')
-    readonly_fields  = ('fixed_quantity',)    # 👈 видно, но не правится
+    list_display     = ('code', 'name', 'quantity', 'fixed_quantity', 'unit', 'category', 'fixed_quantity')
 
 
 class SaleItemInline(admin.TabularInline):
