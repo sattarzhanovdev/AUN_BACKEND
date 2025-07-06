@@ -101,6 +101,7 @@ class StockViewSet(viewsets.ModelViewSet):
         )
 
         stock.quantity += qty_delta
+        stock.fixed_quantity = stock.quantity  # 🔸 добавлено
         stock.save()
         return Response(self.get_serializer(stock).data)
 
