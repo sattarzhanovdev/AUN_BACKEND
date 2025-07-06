@@ -46,7 +46,7 @@ class Stock(models.Model):
     fixed_quantity= models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        editable=False,          # 👈 скрыто в админ-форме
+        editable=True,          # 👈 скрыто в админ-форме
         null=True,
         verbose_name="Получено изначально"
     )

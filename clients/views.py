@@ -101,7 +101,14 @@ class StockViewSet(viewsets.ModelViewSet):
         )
 
         stock.quantity += qty_delta
-        stock.fixed_quantity = stock.quantity  # 🔸 добавлено
+
+        # 👉 обновляем fixed_quantity только если пришло в запросе
+        if 'fixed_quantity' in request.data:
+            try:
+                stock.fixed_quantity = float(request.data['fixed_quantity'])
+            except (TypeError, ValueError):
+                return Response({'error': 'fixed_quantity must be number'}, status=400)
+
         stock.save()
         return Response(self.get_serializer(stock).data)
 
@@ -123,7 +130,14 @@ class StockViewSet(viewsets.ModelViewSet):
         )
 
         stock.quantity = new_qty
-        stock.fixed_quantity = stock.quantity
+
+        # 👉 обновляем fixed_quantity только если пришло в запросе
+        if 'fixed_quantity' in request.data:
+            try:
+                stock.fixed_quantity = float(request.data['fixed_quantity'])
+            except (TypeError, ValueError):
+                return Response({'error': 'fixed_quantity must be number'}, status=400)
+
         stock.save()
         return Response(self.get_serializer(stock).data)
 
