@@ -123,7 +123,7 @@ class StockViewSet(viewsets.ModelViewSet):
         )
 
         stock.quantity = new_qty
-        stock.fixed_quantity = new_qty  # 🔸 добавлено
+        stock.fixed_quantity = stock.quantity
         stock.save()
         return Response(self.get_serializer(stock).data)
 
