@@ -38,22 +38,21 @@ class Category(models.Model):
 
 
 class Stock(models.Model):
-    code          = models.CharField(max_length=50, unique=True)
-    name          = models.CharField(max_length=255)
-    price         = models.DecimalField(max_digits=10, decimal_places=2)
-    price_seller  = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    quantity      = models.DecimalField(max_digits=10, decimal_places=2)
-    fixed_quantity= models.DecimalField(
+    code = models.CharField(max_length=50)
+    name = models.CharField(max_length=255)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price_seller = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    fixed_quantity = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        editable=True,          # 👈 скрыто в админ-форме
+        editable=True,
         null=True,
         verbose_name="Получено изначально"
     )
-    unit          = models.CharField(max_length=50)
-    date_added    = models.DateField(default=now)
-
-    category      = models.ForeignKey(
+    unit = models.CharField(max_length=50)
+    date_added = models.DateField(default=lambda: now().date())
+    category = models.ForeignKey(
         'Category',
         on_delete=models.SET_NULL,
         null=True, blank=True,
@@ -61,9 +60,7 @@ class Stock(models.Model):
         verbose_name="Категория"
     )
 
-    # --- магия сохранения
     def save(self, *args, **kwargs):
-        # при первом сохранении (создание) — зафиксировать стартовый остаток
         if self.pk is None:
             self.fixed_quantity = self.quantity
         super().save(*args, **kwargs)

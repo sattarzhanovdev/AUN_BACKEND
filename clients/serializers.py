@@ -19,8 +19,9 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ['id', 'name']
 
 
+
 class StockSerializer(serializers.ModelSerializer):
-    category = CategorySerializer(read_only=True)
+    category = serializers.StringRelatedField(read_only=True)
     category_id = serializers.PrimaryKeyRelatedField(
         queryset=Category.objects.all(),
         source='category',
@@ -28,12 +29,38 @@ class StockSerializer(serializers.ModelSerializer):
         required=False
     )
     fixed_quantity = serializers.DecimalField(
-        max_digits=10, decimal_places=2  # 👈 только чтение
+        max_digits=10, decimal_places=2
     )
 
     class Meta:
         model = Stock
         fields = '__all__'
+
+
+class StockBulkEntrySerializer(serializers.Serializer):
+    code = serializers.ListField(
+        child=serializers.CharField(max_length=50),
+        write_only=True
+    )
+    name = serializers.CharField()
+    price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    price_seller = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
+    unit = serializers.CharField()
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        source='category',
+        write_only=True,
+        required=False
+    )
+    fixed_quantity = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+
+    def validate_code(self, value):
+        return [str(code) for code in value]  # Превращаем в строки, если вдруг числа
+
+    def create(self, validated_data):
+        # Мы не используем это напрямую в ViewSet
+        pass
 
 
 # ---------- продажи ----------------------------------------------------------

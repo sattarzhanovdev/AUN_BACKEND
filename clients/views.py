@@ -13,7 +13,7 @@ from .models import (
 )
 from .serializers import (
     TransactionSerializer, StockSerializer, SaleHistorySerializer,
-    CategorySerializer, StockMovementSerializer, ReturnItemSerializer, CashSessionSerializer
+    CategorySerializer, StockMovementSerializer, ReturnItemSerializer, CashSessionSerializer, StockBulkEntrySerializer
 )
 
 # ------------------- ТРАНЗАКЦИИ ---------------------------------------------
@@ -62,111 +62,44 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 
 class StockViewSet(viewsets.ModelViewSet):
-    """
-    • CRUD по складу
-    • /stocks/by-code/?code=...        —  GET  поиск
-    • /stocks/by-code/<code>/          —  PUT  +/- qty
-    • /stocks/<id>/update-quantity/    —  PATCH точное qty
-    • POST /stocks/  (list|object)     —  приход / bulk-приход
-    """
     queryset = Stock.objects.all()
     serializer_class = StockSerializer
 
-    # ---------- поиск по коду ---------------------------------------------
-    @action(detail=False, methods=['get'], url_path='by-code')
-    def by_code(self, request):
-        code = request.query_params.get('code')
-        if not code:
-            return Response({'error': 'code is required'}, status=400)
-        qs = self.queryset.filter(code=code)
-        return Response(self.get_serializer(qs, many=True).data)
-
-    # ---------- +/- qty по коду (delta) ------------------------------------
-    @action(detail=False, methods=['put'], url_path='by-code/(?P<code>[^/.]+)')
-    def update_quantity_by_code(self, request, code=None):
-        stock = get_object_or_404(self.queryset, code=code)
-        try:
-            qty_delta = float(request.data.get('quantity'))
-        except (TypeError, ValueError):
-            return Response({'error': 'field "quantity" is required (number)'}, status=400)
-
-        if stock.quantity + qty_delta < 0:
-            return Response({'error': 'Недостаточно остатков'}, status=400)
-
-        StockMovement.objects.create(
-            stock=stock,
-            movement_type='adjust',
-            quantity=abs(qty_delta),
-            comment='Коррекция остатка (PUT by-code)',
-        )
-
-        stock.quantity += qty_delta
-
-        # 👉 обновляем fixed_quantity только если пришло в запросе
-        if 'fixed_quantity' in request.data:
-            try:
-                stock.fixed_quantity = float(request.data['fixed_quantity'])
-            except (TypeError, ValueError):
-                return Response({'error': 'fixed_quantity must be number'}, status=400)
-
-        stock.save()
-        return Response(self.get_serializer(stock).data)
-
-    # ---------- PATCH /stocks/<id>/update-quantity/ (точное значение) -----
-    @action(detail=True, methods=['patch'])
-    def update_quantity(self, request, pk=None):
-        stock = self.get_object()
-        try:
-            new_qty = float(request.data.get('quantity'))
-        except (TypeError, ValueError):
-            return Response({'error': 'quantity must be number'}, status=400)
-
-        delta = new_qty - float(stock.quantity)
-        StockMovement.objects.create(
-            stock=stock,
-            movement_type='adjust',
-            quantity=abs(delta),
-            comment='Ручная установка количества'
-        )
-
-        stock.quantity = new_qty
-
-        # 👉 обновляем fixed_quantity только если пришло в запросе
-        if 'fixed_quantity' in request.data:
-            try:
-                stock.fixed_quantity = float(request.data['fixed_quantity'])
-            except (TypeError, ValueError):
-                return Response({'error': 'fixed_quantity must be number'}, status=400)
-
-        stock.save()
-        return Response(self.get_serializer(stock).data)
-
-    # ---------- bulk-приход / обычный POST ---------------------------------
     def create(self, request, *args, **kwargs):
         data = request.data
 
-        # список объектов
+        # 👇 Теперь всегда обрабатываем список
         if isinstance(data, list):
-            serializer = self.get_serializer(data=data, many=True)
+            serializer = StockBulkEntrySerializer(data=data, many=True)
             serializer.is_valid(raise_exception=True)
-            self._perform_bulk_create(serializer.validated_data)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        # одиночный объект
+            objs = []
+            for entry in serializer.validated_data:
+                entry['fixed_quantity'] = entry.get('fixed_quantity') or entry['quantity']
+                codes = entry.pop("code")
+
+                for code in codes:
+                    objs.append(Stock(code=code, **entry))
+
+            Stock.objects.bulk_create(objs)
+            return Response(StockSerializer(objs, many=True).data, status=status.HTTP_201_CREATED)
+
+        # 👇 Если пришёл один объект — всё равно обернём его как список
+        if isinstance(data.get("code"), list):
+            serializer = StockBulkEntrySerializer(data=[data], many=True)
+            serializer.is_valid(raise_exception=True)
+
+            objs = []
+            for entry in serializer.validated_data:
+                entry['fixed_quantity'] = entry.get('fixed_quantity') or entry['quantity']
+                codes = entry.pop("code")
+                for code in codes:
+                    objs.append(Stock(code=code, **entry))
+
+            Stock.objects.bulk_create(objs)
+            return Response(StockSerializer(objs, many=True).data, status=status.HTTP_201_CREATED)
+
         return super().create(request, *args, **kwargs)
-
-    # ---------- внутренний bulk-helper -------------------------------------
-    def _perform_bulk_create(self, validated_list):
-        """
-        • если fixed_quantity не передан ‒ ставим его равным quantity
-        • затем bulk_create
-        """
-        objs = []
-        for d in validated_list:
-            d['fixed_quantity'] = d.get('fixed_quantity') or d['quantity']
-            objs.append(Stock(**d))
-
-        Stock.objects.bulk_create(objs)
 
 
 # ------------------- ПРОДАЖИ -------------------------------------------------
