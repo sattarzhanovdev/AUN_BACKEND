@@ -8,6 +8,10 @@ from django.db.models import F
 from django.utils.timezone import now
 from django.core.exceptions import ValidationError
 
+from django.utils.timezone import now
+
+def current_date():
+    return now().date()
 
 class Transaction(models.Model):
     TRANSACTION_TYPES = [
@@ -51,7 +55,7 @@ class Stock(models.Model):
         verbose_name="Получено изначально"
     )
     unit = models.CharField(max_length=50)
-    date_added = models.DateField(default=lambda: now().date())
+    date_added = models.DateField(default=current_date)  # ✅ теперь можно сериализовать
     category = models.ForeignKey(
         'Category',
         on_delete=models.SET_NULL,
