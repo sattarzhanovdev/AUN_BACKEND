@@ -60,7 +60,6 @@ class CategoryViewSet(viewsets.ModelViewSet):
 # ------------------- СКЛАД ---------------------------------------------------
 
 
-
 class StockViewSet(viewsets.ModelViewSet):
     queryset = Stock.objects.all()
     serializer_class = StockSerializer
@@ -68,39 +67,26 @@ class StockViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         data = request.data
 
-        # 👇 Теперь всегда обрабатываем список
-        if isinstance(data, list):
-            serializer = StockBulkEntrySerializer(data=data, many=True)
-            serializer.is_valid(raise_exception=True)
+        # оборачиваем одиночный объект в список
+        if not isinstance(data, list):
+            data = [data]
 
-            objs = []
-            for entry in serializer.validated_data:
-                entry['fixed_quantity'] = entry.get('fixed_quantity') or entry['quantity']
-                codes = entry.pop("code")
+        # сериализуем
+        serializer = StockBulkEntrySerializer(data=data, many=True)
+        serializer.is_valid(raise_exception=True)
 
-                for code in codes:
-                    objs.append(Stock(code=code, **entry))
+        # сохраняем
+        created_stocks = serializer.save()
 
-            Stock.objects.bulk_create(objs)
-            return Response(StockSerializer(objs, many=True).data, status=status.HTTP_201_CREATED)
+        # 📌 Если вдруг что-то вернулось в виде [[obj, obj]], выравниваем
+        flat_stocks = []
+        for s in created_stocks:
+            if isinstance(s, list):
+                flat_stocks.extend(s)
+            else:
+                flat_stocks.append(s)
 
-        # 👇 Если пришёл один объект — всё равно обернём его как список
-        if isinstance(data.get("code"), list):
-            serializer = StockBulkEntrySerializer(data=[data], many=True)
-            serializer.is_valid(raise_exception=True)
-
-            objs = []
-            for entry in serializer.validated_data:
-                entry['fixed_quantity'] = entry.get('fixed_quantity') or entry['quantity']
-                codes = entry.pop("code")
-                for code in codes:
-                    objs.append(Stock(code=code, **entry))
-
-            Stock.objects.bulk_create(objs)
-            return Response(StockSerializer(objs, many=True).data, status=status.HTTP_201_CREATED)
-
-        return super().create(request, *args, **kwargs)
-
+        return Response(StockSerializer(flat_stocks, many=True).data, status=status.HTTP_201_CREATED)
 
 # ------------------- ПРОДАЖИ -------------------------------------------------
 

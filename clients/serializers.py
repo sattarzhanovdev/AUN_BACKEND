@@ -56,13 +56,57 @@ class StockBulkEntrySerializer(serializers.Serializer):
     fixed_quantity = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
 
     def validate_code(self, value):
-        return [str(code) for code in value]  # Превращаем в строки, если вдруг числа
+        return [str(code) for code in value]
 
     def create(self, validated_data):
-        # Мы не используем это напрямую в ViewSet
-        pass
+        codes = validated_data.pop('code')
+        created = []
+
+        for code in codes:
+            stock_data = {
+                **validated_data,
+                'code': code,
+            }
+
+            if 'fixed_quantity' not in stock_data or stock_data['fixed_quantity'] is None:
+                stock_data['fixed_quantity'] = stock_data['quantity']
+
+            stock = Stock.objects.create(**stock_data)
+            created.append(stock)
+
+        return created  # ← здесь возвращаем список, что ок, потому что обёртка его расплющит
 
 
+class StockBulkEntrySerializer(serializers.Serializer):
+    code = serializers.ListField(
+        child=serializers.CharField(max_length=50),
+        write_only=True
+    )
+    name = serializers.CharField()
+    price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    price_seller = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
+    unit = serializers.CharField()
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        source='category',
+        write_only=True,
+        required=False
+    )
+    fixed_quantity = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+
+    def validate_code(self, value):
+        return [str(code).strip() for code in value if code]
+
+    def create(self, validated_data):
+        codes = validated_data.pop('code')
+        validated_data['code'] = ",".join(codes)
+
+        if 'fixed_quantity' not in validated_data or validated_data['fixed_quantity'] is None:
+            validated_data['fixed_quantity'] = validated_data['quantity']
+
+        return Stock.objects.create(**validated_data)
+    
 # ---------- продажи ----------------------------------------------------------
 
 class SaleItemSerializer(serializers.ModelSerializer):

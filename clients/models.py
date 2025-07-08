@@ -42,7 +42,7 @@ class Category(models.Model):
 
 
 class Stock(models.Model):
-    code = models.CharField(max_length=50)
+    code = models.CharField(max_length=255)  # ← увеличил длину для хранения нескольких кодов
     name = models.CharField(max_length=255)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     price_seller = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -55,7 +55,7 @@ class Stock(models.Model):
         verbose_name="Получено изначально"
     )
     unit = models.CharField(max_length=50)
-    date_added = models.DateField(default=current_date)  # ✅ теперь можно сериализовать
+    date_added = models.DateField(default=current_date)
     category = models.ForeignKey(
         'Category',
         on_delete=models.SET_NULL,
