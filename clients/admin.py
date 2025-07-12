@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Transaction, Stock, SaleHistory, SaleItem,
-    Category, StockMovement, ReturnItem, CashSession
+    Category, StockMovement, ReturnItem, CashSession, DispatchHistory, DispatchItem
 )
 
 
@@ -54,3 +54,18 @@ class CashSessionAdmin(admin.ModelAdmin):
     list_display  = ('opened_at', 'closed_at', 'opening_sum', 'closing_sum', 'is_open')
     list_filter   = ('closed_at',)
     readonly_fields = ('opened_at', 'closed_at')
+    
+class DispatchItemInline(admin.TabularInline):
+    model = DispatchItem
+    extra = 0
+
+
+@admin.register(DispatchHistory)
+class DispatchHistoryAdmin(admin.ModelAdmin):
+    list_display = ['id', 'recipient', 'total', 'date']
+    inlines = [DispatchItemInline]
+
+
+@admin.register(DispatchItem)
+class DispatchItemAdmin(admin.ModelAdmin):
+    list_display = ['name', 'quantity', 'price', 'total', 'dispatch']

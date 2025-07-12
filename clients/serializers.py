@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Transaction, Stock, SaleHistory, SaleItem,
-    Category, StockMovement, ReturnItem, CashSession
+    Category, StockMovement, ReturnItem, CashSession, DispatchHistory, DispatchItem
 )
 
 
@@ -170,10 +170,38 @@ class StockMovementSerializer(serializers.ModelSerializer):
 class ReturnItemSerializer(serializers.ModelSerializer):
     class Meta:
         model  = ReturnItem
-        fields = ["id", "sale_item", "quantity", "reason", "date"]
+        fields = ["id", "sale_item", "quantity", "reason", "date", "branch"]
         
 class CashSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model  = CashSession
         fields = ['id', 'opened_at', 'opening_sum', 'closed_at', 'closing_sum', 'is_open']
         read_only_fields = ['opened_at', 'closed_at', 'is_open']
+        
+        
+class DispatchItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DispatchItem
+        exclude = ['dispatch']  # ✅ или используем fields и делаем dispatch read_only
+
+class DispatchHistorySerializer(serializers.ModelSerializer):
+    items = DispatchItemSerializer(many=True)
+
+    class Meta:
+        model = DispatchHistory
+        fields = '__all__'
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+        dispatch = DispatchHistory.objects.create(**validated_data)
+
+        total = 0
+        for item_data in items_data:
+            item_data['dispatch'] = dispatch
+            DispatchItem.objects.create(**item_data)
+            total += item_data['total']
+
+        dispatch.total = total
+        dispatch.save()
+
+        return dispatch

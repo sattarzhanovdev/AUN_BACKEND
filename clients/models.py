@@ -138,18 +138,28 @@ class StockMovement(models.Model):
 
 
 class ReturnItem(models.Model):
-    # ⬇️ было OneToOneField → меняем на ForeignKey
+    BRANCH_CHOICES = [
+        ('Сокулук', 'Сокулук'),
+        ('Беловодское', 'Беловодское'),
+    ]
+
     sale_item = models.ForeignKey(
         'SaleItem',
         on_delete=models.CASCADE,
         related_name='return_records'
     )
     quantity = models.PositiveIntegerField()
-    reason   = models.CharField(max_length=255, blank=True, null=True)
-    date     = models.DateTimeField(default=now)
+    reason = models.CharField(max_length=255, blank=True, null=True)
+    date = models.DateTimeField(default=now)
+
+    branch = models.CharField(
+        max_length=100,
+        choices=BRANCH_CHOICES,
+        verbose_name='Филиал'
+    )
 
     def __str__(self):
-        return f"Возврат {self.quantity} × {self.sale_item.name}"
+        return f"Возврат {self.quantity} × {self.sale_item.name} ({self.branch})"
 
     class Meta:
         verbose_name = "Возврат позиции"
@@ -189,3 +199,35 @@ class CashSession(models.Model):
         ordering = ['-opened_at']
         verbose_name = 'Кассовая смена'
         verbose_name_plural = 'Кассовые смены'
+        
+        
+class DispatchHistory(models.Model):
+    recipient = models.CharField(max_length=255, verbose_name="Получатель")  # Можно оставить пустым, если не нужно
+    comment = models.TextField(blank=True, null=True, verbose_name="Комментарий")
+    total = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Итого", default=0)
+    date = models.DateTimeField(default=now, verbose_name="Дата и время отправки")
+
+    def __str__(self):
+        return f"Отправка на {self.total} сом — {self.date.strftime('%d.%m.%Y %H:%M')}"
+
+    class Meta:
+        verbose_name = "Отправка"
+        verbose_name_plural = "История отправок"
+
+
+
+class DispatchItem(models.Model):
+    dispatch = models.ForeignKey(DispatchHistory, related_name="items", on_delete=models.CASCADE)
+    stock = models.ForeignKey(Stock, on_delete=models.SET_NULL, null=True, verbose_name="Товар")
+    code = models.CharField(max_length=100, verbose_name="Код товара")
+    name = models.CharField(max_length=255, verbose_name="Наименование")
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Количество")
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Цена")
+    total = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Сумма")
+
+    def __str__(self):
+        return f"{self.name} × {self.quantity} шт"
+
+    class Meta:
+        verbose_name = "Отправленный товар"
+        verbose_name_plural = "Отправленные товары"

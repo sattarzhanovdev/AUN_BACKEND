@@ -9,10 +9,10 @@ from decimal import Decimal
 
 from .models import (
     Transaction, Stock, SaleHistory, Category,
-    StockMovement, ReturnItem, CashSession
+    StockMovement, ReturnItem, CashSession, DispatchHistory
 )
 from .serializers import (
-    TransactionSerializer, StockSerializer, SaleHistorySerializer,
+    TransactionSerializer, StockSerializer, SaleHistorySerializer, DispatchHistorySerializer,
     CategorySerializer, StockMovementSerializer, ReturnItemSerializer, CashSessionSerializer, StockBulkEntrySerializer
 )
 
@@ -120,7 +120,7 @@ from .serializers import ReturnItemSerializer
 class ReturnItemViewSet(viewsets.ModelViewSet):
     """
     POST принимает:
-      • единичный объект  {sale_item, quantity, reason?}
+      • единичный объект  {sale_item, quantity, reason?, branch}
       • или массив таких объектов […]
     """
     queryset = ReturnItem.objects.all().order_by('-date')
@@ -146,15 +146,18 @@ class ReturnItemViewSet(viewsets.ModelViewSet):
 
     def _save_one(self, data):
         """
-        helper — одно возвращённое SKU
-        (+ откат остатков, + StockMovement, + запись возврата)
+        helper — обработка одного возврата:
+        • откат остатков на складе
+        • создание движения по складу
+        • сохранение возврата
         """
         sale_item = data["sale_item"]
         qty       = data["quantity"]
         reason    = data.get("reason", "")
+        branch    = data.get("branch", "Сокулук")  # значение по умолчанию
 
-        # 1. найдём товар на складе
-        stock, created = Stock.objects.get_or_create(
+        # 1. Найдём или создадим товар на складе
+        stock, _ = Stock.objects.get_or_create(
             code=sale_item.code,
             defaults={
                 "name": sale_item.name,
@@ -165,11 +168,11 @@ class ReturnItemViewSet(viewsets.ModelViewSet):
             }
         )
 
-        # 2. обновим остаток
+        # 2. Обновим остаток (+qty)
         stock.quantity = (stock.quantity or Decimal("0")) + Decimal(qty)
         stock.save(update_fields=["quantity"])
 
-        # 3. создаём движение
+        # 3. Создаём движение по складу
         StockMovement.objects.create(
             stock=stock,
             movement_type="return",
@@ -177,11 +180,12 @@ class ReturnItemViewSet(viewsets.ModelViewSet):
             comment=f"Возврат по продаже #{sale_item.sale_id}"
         )
 
-        # 4. создаём возврат
+        # 4. Создаём возврат
         return ReturnItem.objects.create(
             sale_item=sale_item,
             quantity=qty,
-            reason=reason
+            reason=reason,
+            branch=branch
         )
 
 class CashSessionViewSet(viewsets.ModelViewSet):
@@ -203,3 +207,8 @@ class CashSessionViewSet(viewsets.ModelViewSet):
         session = self.get_object()
         session.close(request.data.get('closing_sum', 0))
         return Response(self.get_serializer(session).data)
+    
+    
+class DispatchHistoryViewSet(viewsets.ModelViewSet):
+    queryset = DispatchHistory.objects.all().order_by('-date')
+    serializer_class = DispatchHistorySerializer
